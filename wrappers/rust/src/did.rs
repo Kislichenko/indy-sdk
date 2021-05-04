@@ -336,6 +336,17 @@ fn _list_my_dids_with_metadata(command_handle: CommandHandle, wallet_handle: Wal
     ErrorCode::from(unsafe { did::indy_list_my_dids_with_meta(command_handle, wallet_handle, cb) })
 }
 
+pub fn list_my_dids_with_priv(wallet_handle: WalletHandle) -> Box<dyn Future<Item=String, Error=IndyError>> {
+    let (receiver, command_handle, cb) = ClosureHandler::cb_ec_string();
+
+    let err = _list_my_dids_with_priv(command_handle, wallet_handle, cb);
+
+    ResultHandler::str(command_handle, err, receiver)
+}
+
+fn _list_my_dids_with_priv(command_handle: CommandHandle, wallet_handle: WalletHandle, cb: Option<ResponseStringCB>) -> ErrorCode {
+    ErrorCode::from(unsafe { did::indy_list_my_dids_with_priv(command_handle, wallet_handle, cb) })
+}
 /// Retrieves abbreviated verkey if it is possible otherwise return full verkey.
 ///
 /// # Arguments

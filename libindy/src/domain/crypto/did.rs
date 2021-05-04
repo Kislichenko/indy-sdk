@@ -167,6 +167,16 @@ pub struct DidWithMeta {
     pub metadata: Option<String>
 }
 
+#[derive(Serialize, Clone, Debug, NamedType)]
+#[serde(rename_all = "camelCase")]
+pub struct DidWithPrivMeta {
+    pub did: DidValue,
+    pub verkey: String,
+    pub privkey: String,
+    pub temp_verkey: Option<String>,
+    pub metadata: Option<String>
+}
+
 #[derive(Serialize, Deserialize, Debug, NamedType)]
 pub struct TheirDid {
     pub did: DidValue,

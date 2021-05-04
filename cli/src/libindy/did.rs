@@ -30,6 +30,10 @@ impl Did {
         did::list_my_dids_with_metadata(wallet_handle).wait()
     }
 
+    pub fn list_dids_with_priv(wallet_handle: WalletHandle) -> Result<String, IndyError> {
+        did::list_my_dids_with_priv(wallet_handle).wait()
+    }
+
     pub fn abbreviate_verkey(did: &str, verkey: &str) -> Result<String, IndyError> {
         did::abbreviate_verkey(did, verkey).wait()
     }

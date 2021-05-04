@@ -400,6 +400,55 @@ fn _get_current_verkey(pool_handle: i32, pool_name: &str, wallet_handle: i32, wa
     Ok(verkey)
 }
 
+pub mod list2_command {
+    use super::*;
+
+    command!(CommandMetadata::build("list2", "List my DIDs stored in the opened wallet.")
+                .finalize());
+
+    fn execute(ctx: &CommandContext, params: &CommandParams) -> Result<(), ()> {
+        trace!("execute >> ctx {:?} params {:?}", ctx, params);
+
+        let wallet_handle = ensure_opened_wallet_handle(&ctx)?;
+
+        let res = match Did::list_dids_with_priv(wallet_handle) {
+            Ok(dids) => {
+                let mut dids: Vec<serde_json::Value> = serde_json::from_str(&dids)
+                    .map_err(|_| println_err!("Wrong data has been received"))?;
+
+                for did_info in dids.iter_mut() {
+                    match Did::abbreviate_verkey(did_info["did"].as_str().unwrap_or(""),
+                                                 did_info["verkey"].as_str().unwrap_or("")) {
+                        Ok(vk) => did_info["verkey"] = serde_json::Value::String(vk),
+                        Err(err) => {
+                            handle_indy_error(err, None, None, None);
+                            return Err(())
+                        }
+                    }
+                }
+
+                print_list_table(&dids,
+                                 &[("did", "Did"),
+                                     ("verkey", "Verkey111"),
+                                     ("privkey", "PrivKey"),
+                                     ("metadata", "Metadata")],
+                                 "There are no dids");
+                if let Some(cur_did) = get_active_did(ctx) {
+                    println_succ!("Current did \"{}\"", cur_did);
+                }
+                Ok(())
+            }
+            Err(err) => {
+                handle_indy_error(err, None, None, None);
+                Err(())
+            },
+        };
+
+        trace!("execute << {:?}", res);
+        res
+    }
+}
+
 pub mod list_command {
     use super::*;
 

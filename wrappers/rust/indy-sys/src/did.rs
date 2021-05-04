@@ -80,6 +80,10 @@ extern {
                                        wallet_handle: WalletHandle,
                                        cb: Option<ResponseStringCB>) -> Error;
 
+                                        #[no_mangle]
+    pub fn indy_list_my_dids_with_priv(command_handle: CommandHandle,
+                                       wallet_handle: WalletHandle,
+                                       cb: Option<ResponseStringCB>) -> Error;
     #[no_mangle]
     pub fn indy_abbreviate_verkey(command_handle: CommandHandle,
                                   did: CString,

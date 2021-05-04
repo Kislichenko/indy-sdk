@@ -634,6 +634,59 @@ pub extern fn indy_get_my_did_with_meta(command_handle: CommandHandle,
     res
 }
 
+/// Retrieves the information about the giving DID in the wallet.
+///
+/// #Params
+/// command_handle: Command handle to map callback to caller context.
+/// wallet_handle: Wallet handle (created by open_wallet).
+/// did - The DID to retrieve information.
+/// cb: Callback that takes command result as parameter.
+///
+/// #Returns
+/// Error Code
+/// cb:
+/// - command_handle_: Command handle to map callback to caller context.
+/// - err: Error code.
+///   did_with_meta:  {
+///     "did": string - DID stored in the wallet,
+///     "verkey": string - The DIDs transport key (ver key, key id),
+///     "tempVerkey": string - Temporary DIDs transport key (ver key, key id), exist only during the rotation of the keys.
+///                            After rotation is done, it becomes a new verkey.
+///     "metadata": string - The meta information stored with the DID
+///   }
+///
+/// #Errors
+/// Common*
+/// Wallet*
+/// Crypto*
+#[no_mangle]
+pub extern fn indy_get_my_did_with_priv(command_handle: CommandHandle,
+                                        wallet_handle: WalletHandle,
+                                        my_did: *const c_char,
+                                        cb: Option<extern fn(command_handle_: CommandHandle,
+                                                             err: ErrorCode,
+                                                             did_with_meta: *const c_char)>) -> ErrorCode {
+    trace!("indy_get_my_did_with_priv: >>> wallet_handle: {:?}, my_did: {:?}", wallet_handle, my_did);
+
+    check_useful_validatable_string!(my_did, ErrorCode::CommonInvalidParam3, DidValue);
+    check_useful_c_callback!(cb, ErrorCode::CommonInvalidParam4);
+
+    trace!("indy_get_my_did_with_priv: entities >>> wallet_handle: {:?}, my_did: {:?}", wallet_handle, my_did);
+
+    let result = CommandExecutor::instance()
+        .send(Command::Did(DidCommand::GetPrivKeyByDid(
+            wallet_handle,
+            my_did,
+            boxed_callback_string!("indy_get_my_did_with_priv", cb, command_handle)
+        )));
+
+    let res = prepare_result!(result);
+
+    trace!("indy_get_my_did_with_priv: <<< res: {:?}", res);
+
+    res
+}
+
 /// Retrieves the information about all DIDs stored in the wallet.
 ///
 /// #Params
@@ -680,6 +733,55 @@ pub extern fn indy_list_my_dids_with_meta(command_handle: CommandHandle,
 
     res
 }
+
+/// Retrieves the information about all DIDs stored in the wallet.
+///
+/// #Params
+/// command_handle: Command handle to map callback to caller context.
+/// wallet_handle: Wallet handle (created by open_wallet).
+/// cb: Callback that takes command result as parameter.
+///
+/// #Returns
+/// Error Code
+/// cb:
+/// - command_handle_: Command handle to map callback to caller context.
+/// - err: Error code.
+///   dids:  [{
+///     "did": string - DID stored in the wallet,
+///     "verkey": string - The DIDs transport key (ver key, key id).,
+///     "metadata": string - The meta information stored with the DID
+///   }]
+///
+/// #Errors
+/// Common*
+/// Wallet*
+/// Crypto*
+#[no_mangle]
+pub extern fn indy_list_my_dids_with_priv(command_handle: CommandHandle,
+                                          wallet_handle: WalletHandle,
+                                          cb: Option<extern fn(command_handle_: CommandHandle,
+                                                               err: ErrorCode,
+                                                               dids: *const c_char)>) -> ErrorCode {
+    trace!("indy_list_my_dids_with_priv: >>> wallet_handle: {:?}", wallet_handle);
+
+    check_useful_c_callback!(cb, ErrorCode::CommonInvalidParam3);
+
+    trace!("indy_list_my_dids_with_priv: entities >>> wallet_handle: {:?}", wallet_handle);
+
+    let result = CommandExecutor::instance()
+        .send(Command::Did(DidCommand::ListMyDidsWithPriv(
+            wallet_handle,
+            boxed_callback_string!("indy_list_my_dids_with_priv", cb, command_handle)
+        )));
+
+    let res = prepare_result!(result);
+
+    trace!("indy_list_my_dids_with_priv: <<< res: {:?}", res);
+
+    res
+}
+
+
 
 /// Retrieves abbreviated verkey if it is possible otherwise return full verkey.
 ///

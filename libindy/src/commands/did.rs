@@ -6,8 +6,9 @@ use serde_json;
 
 use crate::commands::{Command, CommandExecutor, BoxedCallbackStringStringSend};
 use crate::commands::ledger::LedgerCommand;
-use crate::domain::crypto::did::{Did, DidValue, DidMetadata, DidWithMeta, MyDidInfo, TemporaryDid, TheirDid, TheirDidInfo, DidMethod};
-use crate::domain::crypto::key::KeyInfo;
+use crate::domain::crypto::did::{Did, DidValue, DidMetadata, DidWithMeta, DidWithPrivMeta, MyDidInfo, TemporaryDid, TheirDid, TheirDidInfo, DidMethod};
+use crate::domain::crypto::key::{Key, KeyInfo};
+//use crate::domain::crypto::newKey::{Key, KeyInfo};
 use crate::domain::ledger::attrib::{AttribData, Endpoint, GetAttrReplyResult};
 use crate::domain::ledger::nym::{GetNymReplyResult, GetNymResultDataV0};
 use crate::domain::ledger::response::Reply;
@@ -43,9 +44,16 @@ pub enum DidCommand {
         WalletHandle,
         DidValue, // my did
         Box<dyn Fn(IndyResult<String>) + Send>),
+    GetPrivKeyByDid(
+        WalletHandle,
+        DidValue, // my did
+        Box<dyn Fn(IndyResult<String>) + Send>),
     ListMyDidsWithMeta(
         WalletHandle,
         Box<dyn Fn(IndyResult<String>) + Send>),
+    ListMyDidsWithPriv(
+        WalletHandle,
+        Box<dyn Fn(IndyResult<String>) + Send>),    
     KeyForDid(
         PoolHandle, // pool handle
         WalletHandle,
@@ -151,9 +159,17 @@ impl DidCommandExecutor {
                 debug!("GetMyDidWithMeta command received");
                 cb(self.get_my_did_with_meta(wallet_handle, &my_did))
             }
+            DidCommand::GetPrivKeyByDid(wallet_handle, my_did, cb) => {
+                debug!("GetPrivKeyByDid command received");
+                cb(self.get_priv_key_by_did(wallet_handle, &my_did))
+            }
             DidCommand::ListMyDidsWithMeta(wallet_handle, cb) => {
                 debug!("ListMyDidsWithMeta command received");
                 cb(self.list_my_dids_with_meta(wallet_handle));
+            }
+            DidCommand::ListMyDidsWithPriv(wallet_handle, cb) => {
+                debug!("ListMyDidsWithPriv command received");
+                cb(self.list_my_dids_with_priv(wallet_handle));
             }
             DidCommand::KeyForDid(pool_handle, wallet_handle, did, cb) => {
                 debug!("KeyForDid command received");
@@ -304,6 +320,33 @@ impl DidCommandExecutor {
         Ok(res)
     }
 
+    fn get_priv_key_by_did(&self, wallet_handle: WalletHandle, my_did: &DidValue) -> IndyResult<String> {
+        debug!("get_priv_key_by_did >>> wallet_handle: {:?}, my_did: {:?}", wallet_handle, my_did);
+
+        let did = self.wallet_service.get_indy_object::<Did>(wallet_handle, &my_did.0, &RecordOptions::id_value())?;
+        let metadata = self.wallet_service.get_indy_opt_object::<DidMetadata>(wallet_handle, &did.did.0, &RecordOptions::id_value())?;
+        let temp_verkey = self.wallet_service.get_indy_opt_object::<TemporaryDid>(wallet_handle, &did.did.0, &RecordOptions::id_value())?;
+
+        let my_key : Key = self.wallet_service.get_indy_object::<Key>(wallet_handle, &did.verkey, &RecordOptions::id_value())?;
+        let my_sk = &my_key.signkey.as_str();
+
+        let did_with_meta = DidWithPrivMeta {
+            did: did.did,
+            verkey: did.verkey,
+            privkey: my_sk.to_string(),
+            temp_verkey: temp_verkey.map(|tv| tv.verkey),
+            metadata: metadata.map(|m| m.value),
+        };
+
+        let res = serde_json::to_string(&did_with_meta)
+            .to_indy(IndyErrorKind::InvalidState, "Can't serialize DID")?;
+
+        debug!("get_priv_key_by_did <<< res: {:?}", res);
+
+        Ok(res)
+
+    }
+
     fn list_my_dids_with_meta(&self, wallet_handle: WalletHandle) -> IndyResult<String> {
         debug!("list_my_dids_with_meta >>> wallet_handle: {:?}", wallet_handle);
 
@@ -337,6 +380,47 @@ impl DidCommandExecutor {
             .to_indy(IndyErrorKind::InvalidState, "Can't serialize DIDs list")?;
 
         debug!("list_my_dids_with_meta <<< res: {:?}", res);
+
+        Ok(res)
+    }
+
+    fn list_my_dids_with_priv(&self, wallet_handle: WalletHandle) -> IndyResult<String> {
+        debug!("list_my_dids_with_priv >>> wallet_handle: {:?}", wallet_handle);
+
+        let mut did_search =
+            self.wallet_service.search_indy_records::<Did>(wallet_handle, "{}", &SearchOptions::id_value())?;
+
+        let mut dids: Vec<DidWithPrivMeta> = Vec::new();
+
+        while let Some(did_record) = did_search.fetch_next_record()? {
+            let did_id = did_record.get_id();
+
+            let did: Did = did_record.get_value()
+                .ok_or_else(|| err_msg(IndyErrorKind::InvalidState, "No value for DID record"))
+                .and_then(|tags_json| serde_json::from_str(&tags_json)
+                    .to_indy(IndyErrorKind::InvalidState, format!("Cannot deserialize Did: {:?}", did_id)))?;
+
+            let metadata = self.wallet_service.get_indy_opt_object::<DidMetadata>(wallet_handle, &did.did.0, &RecordOptions::id_value())?;
+            let temp_verkey = self.wallet_service.get_indy_opt_object::<TemporaryDid>(wallet_handle, &did.did.0, &RecordOptions::id_value())?;
+
+            let my_key : Key = self.wallet_service.get_indy_object::<Key>(wallet_handle, &did.verkey, &RecordOptions::id_value())?;
+            let my_sk = &my_key.signkey.as_str();
+
+            let did_with_meta = DidWithPrivMeta {
+                did: did.did,
+                verkey: did.verkey,
+                privkey: my_sk.to_string(),
+                temp_verkey: temp_verkey.map(|tv| tv.verkey),
+                metadata: metadata.map(|m| m.value),
+            };
+
+            dids.push(did_with_meta);
+        }
+
+        let res = serde_json::to_string(&dids)
+            .to_indy(IndyErrorKind::InvalidState, "Can't serialize DIDs list")?;
+
+        debug!("list_my_dids_with_priv <<< res: {:?}", res);
 
         Ok(res)
     }
